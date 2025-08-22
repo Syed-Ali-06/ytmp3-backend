@@ -13,29 +13,36 @@ app.use(cors({
   methods: ["GET","POST","OPTIONS"],
   allowedHeaders: ["Content-Type"]
 }));
-
 app.use(express.json());
 app.options("*", cors());
 
 app.get("/", (req,res) => res.send("ytmp3 backend running 🚀"));
 
-app.post("/download", (req,res) => {
-  const { url } = req.body;
+app.post("/download", (req, res) => {
+  const { url, cookies } = req.body;
+
   if (!url) return res.status(400).json({ error: "No URL provided" });
 
   // Unique temp filename
   const tempFile = path.join("/tmp", `audio_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.mp3`);
 
-  // yt-dlp command: save file locally
-  const cmd = `yt-dlp -x --audio-format mp3 -o "${tempFile}" "${url}"`;
+  // Build yt-dlp command
+  let cmd = `yt-dlp -x --audio-format mp3 -o "${tempFile}" "${url}"`;
+
+  // If cookies provided, add them
+  if (cookies) {
+    const cookieFile = path.join("/tmp", `cookies_${Date.now()}.txt`);
+    fs.writeFileSync(cookieFile, cookies);
+    cmd += ` --cookies "${cookieFile}"`;
+  }
 
   exec(cmd, (err, stdout, stderr) => {
     if (err) {
       console.error("yt-dlp error:", stderr);
-      return res.status(500).json({ error: "Conversion failed" });
+      return res.status(500).json({ error: "Conversion failed", details: stderr });
     }
 
-    // Send file
+    // Send file to client
     res.download(tempFile, "audio.mp3", (err) => {
       if (err) console.error(err);
       fs.unlink(tempFile, () => {}); // delete temp file
