@@ -1,51 +1,46 @@
 import express from "express";
 import cors from "cors";
-import { spawn } from "child_process";
+import { exec } from "child_process";
+import path from "path";
+import fs from "fs";
+import crypto from "crypto";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Enable CORS for GitHub Pages frontend
 app.use(cors({
-  origin: "https://syed-ali-06.github.io", // your frontend URL
-  methods: ["GET", "POST", "OPTIONS"],
+  origin: "https://syed-ali-06.github.io",
+  methods: ["GET","POST","OPTIONS"],
   allowedHeaders: ["Content-Type"]
 }));
 
 app.use(express.json());
+app.options("*", cors());
 
-// Preflight handler for OPTIONS
-app.options("*", cors()); // allow all OPTIONS requests
+app.get("/", (req,res) => res.send("ytmp3 backend running 🚀"));
 
-// Test endpoint
-app.get("/", (req, res) => {
-  res.send("ytmp3 backend running 🚀");
-});
-
-// Download MP3
-app.post("/download", (req, res) => {
+app.post("/download", (req,res) => {
   const { url } = req.body;
+  if (!url) return res.status(400).json({ error: "No URL provided" });
 
-  if (!url) {
-    return res.status(400).json({ error: "No URL provided" });
-  }
+  // Unique temp filename
+  const tempFile = path.join("/tmp", `audio_${Date.now()}_${crypto.randomBytes(4).toString("hex")}.mp3`);
 
-  const ytdlp = spawn("yt-dlp", ["-x", "--audio-format", "mp3", "-o", "-", url]);
+  // yt-dlp command: save file locally
+  const cmd = `yt-dlp -x --audio-format mp3 -o "${tempFile}" "${url}"`;
 
-  res.setHeader("Content-Disposition", "attachment; filename=audio.mp3");
-  res.setHeader("Content-Type", "audio/mpeg");
+  exec(cmd, (err, stdout, stderr) => {
+    if (err) {
+      console.error("yt-dlp error:", stderr);
+      return res.status(500).json({ error: "Conversion failed" });
+    }
 
-  ytdlp.stdout.pipe(res);
-
-  ytdlp.stderr.on("data", (data) => {
-    console.error(`yt-dlp error: ${data}`);
-  });
-
-  ytdlp.on("close", (code) => {
-    if (code !== 0) console.error(`yt-dlp exited with code ${code}`);
+    // Send file
+    res.download(tempFile, "audio.mp3", (err) => {
+      if (err) console.error(err);
+      fs.unlink(tempFile, () => {}); // delete temp file
+    });
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
