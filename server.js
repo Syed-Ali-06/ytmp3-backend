@@ -5,11 +5,17 @@ import { spawn } from "child_process";
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Allow frontend to access
+// Enable CORS for GitHub Pages frontend
 app.use(cors({
-  origin: "*" // Replace "*" with your frontend URL for security later
+  origin: "https://syed-ali-06.github.io", // your frontend URL
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type"]
 }));
+
 app.use(express.json());
+
+// Preflight handler for OPTIONS
+app.options("*", cors()); // allow all OPTIONS requests
 
 // Test endpoint
 app.get("/", (req, res) => {
@@ -24,10 +30,8 @@ app.post("/download", (req, res) => {
     return res.status(400).json({ error: "No URL provided" });
   }
 
-  // Use spawn for streaming
   const ytdlp = spawn("yt-dlp", ["-x", "--audio-format", "mp3", "-o", "-", url]);
 
-  // Set headers for download
   res.setHeader("Content-Disposition", "attachment; filename=audio.mp3");
   res.setHeader("Content-Type", "audio/mpeg");
 
@@ -38,9 +42,7 @@ app.post("/download", (req, res) => {
   });
 
   ytdlp.on("close", (code) => {
-    if (code !== 0) {
-      console.error(`yt-dlp exited with code ${code}`);
-    }
+    if (code !== 0) console.error(`yt-dlp exited with code ${code}`);
   });
 });
 
